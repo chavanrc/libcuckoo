@@ -14,7 +14,6 @@
 #include <iostream>
 #include <iterator>
 #include <limits>
-#include <list>
 #include <memory>
 #include <mutex>
 #include <stdexcept>
@@ -22,11 +21,14 @@
 #include <thread>
 #include <type_traits>
 #include <utility>
-#include <vector>
 
 #include "cuckoohash_config.hh"
 #include "cuckoohash_util.hh"
 #include "bucket_container.hh"
+
+#include <boost/interprocess/containers/list.hpp>
+#include <boost/interprocess/containers/vector.hpp>
+namespace bi = boost::interprocess;
 
 namespace libcuckoo {
 
@@ -697,6 +699,17 @@ public:
   }
 
   /**
+   * Removes all locks in the table.
+   */
+  void unlock_all() {
+    for(auto& locks : all_locks_) {
+      for(auto& lock : locks) {
+        lock.unlock();
+      }
+    }
+  }
+
+  /**
    * Construct a @ref locked_table object that owns all the locks in the
    * table.
    *
@@ -860,8 +873,8 @@ private:
   using rebind_alloc =
       typename std::allocator_traits<allocator_type>::template rebind_alloc<U>;
 
-  using locks_t = std::vector<spinlock, rebind_alloc<spinlock>>;
-  using all_locks_t = std::list<locks_t, rebind_alloc<locks_t>>;
+  using locks_t = bi::vector<spinlock, rebind_alloc<spinlock>>;
+  using all_locks_t = bi::list<locks_t, rebind_alloc<locks_t>>;
 
   // Classes for managing locked buckets. By storing and moving around sets of
   // locked buckets in these classes, we can ensure that they are unlocked
@@ -1920,7 +1933,7 @@ private:
     const size_type num_extra_threads = max_num_worker_threads();
     const size_type num_workers = 1 + num_extra_threads;
     size_type work_per_thread = (end - start) / num_workers;
-    std::vector<std::thread, rebind_alloc<std::thread>> threads(
+    bi::vector<std::thread, rebind_alloc<std::thread>> threads(
         get_allocator());
     threads.reserve(num_extra_threads);
     for (size_type i = 0; i < num_extra_threads; ++i) {
@@ -1938,11 +1951,11 @@ private:
     const size_type num_extra_threads = max_num_worker_threads();
     const size_type num_workers = 1 + num_extra_threads;
     size_type work_per_thread = (end - start) / num_workers;
-    std::vector<std::thread, rebind_alloc<std::thread>> threads(
+    bi::vector<std::thread, rebind_alloc<std::thread>> threads(
         get_allocator());
     threads.reserve(num_extra_threads);
 
-    std::vector<std::exception_ptr, rebind_alloc<std::exception_ptr>> eptrs(
+    bi::vector<std::exception_ptr, rebind_alloc<std::exception_ptr>> eptrs(
         num_workers, nullptr, get_allocator());
     for (size_type i = 0; i < num_extra_threads; ++i) {
       threads.emplace_back(func, start, start + work_per_thread,
